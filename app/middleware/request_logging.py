@@ -27,6 +27,11 @@ class JsonLogFormatter(logging.Formatter):
             "status_code",
             "duration_ms",
             "client_host",
+            "question",
+            "top_k",
+            "result_count",
+            "retrieved_chunk_ids",
+            "scores",
         ]
 
         for field in extra_fields:
@@ -53,6 +58,7 @@ def configure_logging() -> None:
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        request.state.request_id = request_id
         start_time = time.perf_counter()
 
         try:
