@@ -1,603 +1,629 @@
-\# AI Knowledge Assistant API
+# AI Knowledge Assistant API
 
+Production-oriented RAG backend built with FastAPI, SentenceTransformers, FAISS and OpenAI.
 
+AI Knowledge Assistant demonstrates backend and AI engineering patterns used in real LLM systems: document ingestion, text chunking, embedding generation, vector search, source-grounded answer generation, retrieval evaluation, structured logging, Docker-based development and GitHub Actions CI.
 
-A production-style FastAPI backend for document question answering using Retrieval Augmented Generation.
+---
 
+## Highlights
 
+* FastAPI backend for document question answering
+* Retrieval-Augmented Generation architecture
+* Local document ingestion and metadata storage
+* Text chunking optimized for cleaner semantic retrieval
+* SentenceTransformers embedding pipeline
+* FAISS vector search using cosine-style similarity
+* OpenAI-powered grounded answer generation
+* Source-aware `/ask` responses
+* Retrieval evaluation endpoint for checking top-k quality
+* Structured JSON request logs
+* Request ID propagation with `X-Request-ID`
+* Retrieval trace logging with chunk IDs and similarity scores
+* Docker and Docker Compose support
+* Automated tests with pytest
+* GitHub Actions CI
 
-The system allows users to upload text documents, split them into chunks, generate embeddings, store them in a FAISS vector index, retrieve relevant context, and answer questions using an LLM based only on retrieved document context.
+---
 
+## Architecture
 
+The project is organized around clear service boundaries.
 
-\## Why this project exists
-
-
-
-This project was built as a portfolio backend project for AI Engineer roles.
-
-
-
-It demonstrates:
-
-
-
-\- FastAPI backend architecture
-
-\- Document ingestion
-
-\- Text chunking
-
-\- Embedding generation
-
-\- FAISS vector search
-
-\- Retrieval Augmented Generation
-
-\- Source-grounded LLM answers
-
-\- Clean separation between API routes, schemas, and services
-
-
-
-\## Tech stack
-
-
-
-\- Python 3.11+
-
-\- FastAPI
-
-\- Pydantic
-
-\- Uvicorn
-
-\- SentenceTransformers
-
-\- FAISS
-
-\- OpenAI API
-
-\- python-dotenv
-
-
-
-\## RAG pipeline
-
-
+API routes stay thin. Business logic lives in services. Schemas define request and response contracts.
 
 ```text
-
-Upload document
-
-&#x20;     ↓
-
-Read text
-
-&#x20;     ↓
-
-Split into chunks
-
-&#x20;     ↓
-
-Generate embeddings
-
-&#x20;     ↓
-
-Build FAISS vector index
-
-&#x20;     ↓
-
-Ask question
-
-&#x20;     ↓
-
-Embed question
-
-&#x20;     ↓
-
-Retrieve relevant chunks
-
-&#x20;     ↓
-
-Send context to LLM
-
-&#x20;     ↓
-
-Return grounded answer + sources
-
-```
-
-
-
-\## Project structure
-
-
-
-```text
-
 app/
-
 ├── api/
-
-│   └── routes.py
-
-├── core/
-
-│   └── config.py
-
-├── schemas/
-
 │   ├── ask.py
-
+│   ├── dependencies.py
+│   ├── documents.py
+│   ├── embeddings.py
+│   ├── evaluation.py
+│   ├── health.py
+│   ├── routes.py
+│   ├── search.py
+│   └── vector.py
+├── core/
+│   └── config.py
+├── middleware/
+│   └── request_logging.py
+├── schemas/
+│   ├── ask.py
 │   ├── chunk.py
-
 │   ├── document.py
-
 │   ├── embedding.py
-
+│   ├── evaluation.py
 │   └── search.py
-
 ├── services/
-
-│   ├── chunk\_store.py
-
+│   ├── chunk_store.py
 │   ├── chunker.py
-
-│   ├── document\_store.py
-
-│   ├── embedding\_service.py
-
-│   ├── embedding\_store.py
-
-│   ├── llm\_service.py
-
-│   ├── rag\_service.py
-
-│   └── vector\_store.py
-
+│   ├── document_store.py
+│   ├── embedding_service.py
+│   ├── embedding_store.py
+│   ├── llm_service.py
+│   ├── rag_service.py
+│   └── vector_store.py
 └── main.py
-
 ```
 
+---
 
+## RAG Flow
 
-\## Main endpoints
+```text
+Upload document
+      ↓
+Read and normalize text
+      ↓
+Split text into retrieval-friendly chunks
+      ↓
+Generate embeddings with SentenceTransformers
+      ↓
+Store chunk embeddings
+      ↓
+Build FAISS vector index
+      ↓
+Ask a question
+      ↓
+Embed the question
+      ↓
+Retrieve top-k relevant chunks
+      ↓
+Send retrieved context to the LLM
+      ↓
+Return grounded answer + source chunks
+```
 
+---
 
+## Engineering Decisions
 
-\### Health check
+### Thin API routes
 
+Routes are intentionally small. They validate request flow, call services, and return typed responses.
 
+### Service-oriented backend structure
+
+Document storage, chunking, embedding generation, vector search and RAG orchestration are separated into service classes. This keeps the system easier to test and extend.
+
+### Local-first storage
+
+The first version uses local JSON files and local FAISS index files. This keeps the project simple and easy to run while still demonstrating the core AI backend architecture.
+
+### FAISS IndexFlatIP
+
+The vector store uses FAISS `IndexFlatIP`. Embeddings are normalized, so inner product behaves like cosine similarity.
+
+### Grounded answers
+
+The `/ask` flow is designed to answer only from retrieved document context and return sources with the answer.
+
+### Retrieval quality before extra infrastructure
+
+The project prioritizes retrieval quality, evaluation and observability before adding heavier infrastructure such as PostgreSQL, queues or authentication.
+
+---
+
+## Features
+
+### Document ingestion
+
+* Upload `.txt` documents
+* Store uploaded files locally
+* Store metadata in JSON
+* Validate empty files and max upload size
+* Decode common text encodings
+
+### Chunking
+
+* Normalizes whitespace
+* Removes BOM artifacts
+* Avoids cutting chunks in the middle of words when possible
+* Uses overlap to preserve context across chunk boundaries
+* Merges very small final chunks
+* Covered by unit tests
+
+### Embeddings
+
+* Generates chunk embeddings with SentenceTransformers
+* Stores embeddings locally
+* Exposes embedding metadata without returning full vectors
+
+### Vector search
+
+* Builds a FAISS index from chunk embeddings
+* Supports semantic search over document chunks
+* Returns chunk IDs, text and similarity scores
+
+### RAG answers
+
+* Retrieves relevant chunks
+* Sends context to OpenAI
+* Returns grounded answers with source chunks
+
+### Retrieval evaluation
+
+* Evaluates whether an expected chunk appears in top-k results
+* Returns hit/miss, rank and precision-style score
+* Useful for validating retrieval quality during development
+
+### Observability
+
+* Adds `X-Request-ID` to responses
+* Accepts incoming `X-Request-ID` headers
+* Emits structured JSON logs
+* Logs request method, path, status code and latency
+* Logs retrieval traces with question, top-k, chunk IDs and scores
+
+---
+
+## API Endpoints
+
+### Health
 
 ```http
-
 GET /health
-
 ```
 
+Returns API health status.
 
+---
 
-Returns basic API status.
-
-
-
-\### Upload document
-
-
+### Upload document
 
 ```http
-
 POST /documents/upload
-
 ```
-
-
 
 Uploads a `.txt` document.
 
+---
 
-
-\### List documents
-
-
+### List documents
 
 ```http
-
 GET /documents
-
 ```
-
-
 
 Returns uploaded document metadata.
 
+---
 
-
-\### Create chunks
-
-
+### Create chunks
 
 ```http
-
-POST /documents/{document\_id}/chunks
-
+POST /documents/{document_id}/chunks
 ```
 
+Splits a document into retrieval chunks.
 
+---
 
-Splits the selected document into text chunks.
-
-
-
-\### Get chunks
-
-
+### Get chunks
 
 ```http
-
-GET /documents/{document\_id}/chunks
-
+GET /documents/{document_id}/chunks
 ```
-
-
 
 Returns chunks for a document.
 
+---
 
-
-\### Generate embeddings
-
-
+### Generate embeddings
 
 ```http
-
-POST /documents/{document\_id}/embeddings
-
+POST /documents/{document_id}/embeddings
 ```
-
-
 
 Generates embeddings for document chunks.
 
+---
 
-
-\### Get embeddings summary
-
-
+### Get embeddings summary
 
 ```http
-
-GET /documents/{document\_id}/embeddings
-
+GET /documents/{document_id}/embeddings
 ```
-
-
 
 Returns embedding metadata without exposing full vectors.
 
+---
 
-
-\### Rebuild FAISS index
-
-
+### Rebuild vector index
 
 ```http
-
 POST /vector-index/rebuild
-
 ```
 
+Builds a local FAISS index from generated embeddings.
 
+---
 
-Builds a local FAISS vector index from generated embeddings.
-
-
-
-\### Semantic search
-
-
+### Semantic search
 
 ```http
-
 POST /search
-
 ```
-
-
 
 Retrieves relevant chunks for a question.
 
-
-
 Example body:
 
-
-
 ```json
-
 {
-
-&#x20; "question": "What is this document about?",
-
-&#x20; "top\_k": 3
-
+  "question": "What are the current limitations of the project?",
+  "top_k": 3
 }
-
 ```
-
-
-
-\### Ask question
-
-
-
-```http
-
-POST /ask
-
-```
-
-
-
-Runs the full RAG pipeline.
-
-
-
-Example body:
-
-
-
-```json
-
-{
-
-&#x20; "question": "What is this document about?"
-
-}
-
-```
-
-
 
 Example response:
 
-
-
 ```json
-
 {
-
-&#x20; "answer": "The document is about FastAPI, RAG, embeddings, and vector search.",
-
-&#x20; "sources": \[
-
-&#x20;   {
-
-&#x20;     "document\_id": "example-document-id",
-
-&#x20;     "chunk\_id": "example-chunk-id",
-
-&#x20;     "text": "This is a test document about FastAPI RAG embeddings and vector search."
-
-&#x20;   }
-
-&#x20; ]
-
+  "question": "What are the current limitations of the project?",
+  "results": [
+    {
+      "document_id": "example-document-id",
+      "chunk_id": "example-chunk-id",
+      "chunk_index": 2,
+      "text": "Current limitations include local JSON storage, local FAISS index files, and synchronous embedding generation.",
+      "score": 0.3602
+    }
+  ]
 }
-
 ```
 
-## Docker setup
+---
+
+### Retrieval evaluation
+
+```http
+POST /evaluation/retrieval
+```
+
+Checks whether an expected chunk appears in retrieved top-k results.
+
+Example body:
+
+```json
+{
+  "question": "What are the current limitations of the project?",
+  "expected_chunk_id": "example-chunk-id",
+  "top_k": 3
+}
+```
+
+Example response:
+
+```json
+{
+  "question": "What are the current limitations of the project?",
+  "expected_chunk_id": "example-chunk-id",
+  "retrieved_chunk_ids": [
+    "example-chunk-id",
+    "another-chunk-id"
+  ],
+  "hit": true,
+  "rank": 1,
+  "precision_at_k": 1.0
+}
+```
+
+---
+
+### Ask question
+
+```http
+POST /ask
+```
+
+Runs the full RAG pipeline.
+
+Example body:
+
+```json
+{
+  "question": "What is this document about?"
+}
+```
+
+Example response:
+
+```json
+{
+  "answer": "The document is about FastAPI, RAG, embeddings and vector search.",
+  "sources": [
+    {
+      "document_id": "example-document-id",
+      "chunk_id": "example-chunk-id",
+      "text": "This is a test document about FastAPI RAG embeddings and vector search."
+    }
+  ]
+}
+```
+
+---
+
+## Local Setup
+
+### 1. Create a virtual environment
+
+Windows:
+
+```cmd
+py -3.13 -m venv .venv
+.venv\Scripts\activate.bat
+```
+
+macOS / Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Create environment file
+
+Create a `.env` file in the project root:
+
+```env
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=your_model_here
+RAG_TOP_K=3
+```
+
+### 4. Run the API
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Open API docs:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## Docker Setup
 
 Build the Docker image:
 
 ```bash
 docker compose build
+```
 
 Run the API:
 
+```bash
 docker compose up
+```
 
 Open API docs:
 
+```text
 http://127.0.0.1:8000/docs
+```
 
 Stop the containers:
 
+```bash
 docker compose down
-
-The application stores local runtime data in:
-
-data/
-
-This directory is mounted as a Docker volume and is ignored by Git.
-
-\## Local setup
-
-
-
-\### 1. Create virtual environment
-
-
-
-Windows:
-
-
-
-```cmd
-
-py -3.13 -m venv .venv
-
-.venv\\Scripts\\activate.bat
-
 ```
 
-
-
-macOS / Linux:
-
-
-
-```bash
-
-python3 -m venv .venv
-
-source .venv/bin/activate
-
-```
-
-
-
-\### 2. Install dependencies
-
-
-
-```bash
-
-pip install -r requirements.txt
-
-```
-
-
-
-\### 3. Create environment file
-
-
-
-Create a `.env` file in the project root:
-
-
-
-```env
-
-OPENAI\_API\_KEY=your\_api\_key\_here
-
-OPENAI\_MODEL=your\_model\_here
-
-RAG\_TOP\_K=3
-
-```
-
-
-
-\### 4. Run the API
-
-
-
-```bash
-
-uvicorn app.main:app --reload
-
-```
-
-
-
-Open API docs:
-
-
+Local runtime data is stored in:
 
 ```text
-
-http://127.0.0.1:8000/docs
-
+data/
 ```
 
+This directory is ignored by Git.
 
+---
 
-\## Example usage flow
+## Example Usage Flow
 
+1. Start the API.
+2. Upload a `.txt` document with `POST /documents/upload`.
+3. Copy the returned `document_id`.
+4. Create chunks with `POST /documents/{document_id}/chunks`.
+5. Generate embeddings with `POST /documents/{document_id}/embeddings`.
+6. Rebuild the FAISS index with `POST /vector-index/rebuild`.
+7. Test retrieval with `POST /search`.
+8. Evaluate retrieval quality with `POST /evaluation/retrieval`.
+9. Ask a grounded question with `POST /ask`.
 
+---
 
-1\. Start the API.
+## Retrieval Quality
 
-2\. Upload a `.txt` document with `POST /documents/upload`.
+The project includes basic retrieval quality validation.
 
-3\. Copy the returned `document\_id`.
+A manual validation flow was used to check whether relevant chunks appear in top-k retrieval results.
 
-4\. Create chunks with `POST /documents/{document\_id}/chunks`.
+Example checks:
 
-5\. Generate embeddings with `POST /documents/{document\_id}/embeddings`.
+* A specific FAISS question should retrieve the chunk explaining query embeddings and stored chunk embeddings.
+* A limitations question should retrieve the chunk describing local JSON storage, local FAISS files and synchronous embedding generation.
+* General questions may retrieve relevant context in top-k even when the best chunk is not ranked first.
 
-6\. Rebuild the FAISS index with `POST /vector-index/rebuild`.
+This makes retrieval behavior inspectable instead of treating the RAG pipeline as a black box.
 
-7\. Ask a question with `POST /ask`.
+---
 
+## Evaluation Methodology
 
+The `/evaluation/retrieval` endpoint supports lightweight retrieval evaluation.
 
-\## Current limitations
+It measures:
 
+* whether the expected chunk appears in retrieved results
+* the rank of the expected chunk
+* a simple precision-style hit score
 
+This is intentionally simple. The goal is not to build an academic evaluation framework, but to demonstrate practical AI engineering discipline: checking whether retrieval returns the context the LLM needs.
 
-This is intentionally a simple portfolio version.
+---
 
+## Observability
 
+The API includes production-oriented observability basics.
+
+Each request receives an `X-Request-ID` response header. If a client sends an `X-Request-ID`, the API reuses it.
+
+Request logs are emitted as structured JSON.
+
+Example request log:
+
+```json
+{
+  "level": "INFO",
+  "message": "request_completed",
+  "logger": "app.request",
+  "request_id": "manual-retrieval-test-1",
+  "method": "POST",
+  "path": "/search",
+  "status_code": 200,
+  "duration_ms": 123.45,
+  "client_host": "127.0.0.1"
+}
+```
+
+Retrieval logs include retrieved chunk IDs and scores.
+
+Example retrieval log:
+
+```json
+{
+  "level": "INFO",
+  "message": "retrieval_completed",
+  "logger": "app.retrieval",
+  "request_id": "manual-retrieval-test-1",
+  "question": "What are the current limitations of the project?",
+  "top_k": 3,
+  "result_count": 3,
+  "retrieved_chunk_ids": [
+    "example-chunk-id"
+  ],
+  "scores": [
+    0.3602
+  ]
+}
+```
+
+---
+
+## Tests
+
+Run tests:
+
+```bash
+pytest
+```
+
+Current test coverage includes:
+
+* health endpoint
+* request ID header
+* text normalization
+* BOM cleanup
+* chunk creation
+* small final chunk merging
+* document storage
+* retrieval evaluation hit case
+* retrieval evaluation miss case
+
+---
+
+## CI
+
+GitHub Actions runs the test suite on push and pull requests to `main`.
+
+The CI pipeline helps verify that core backend behavior remains stable as the project evolves.
+
+---
+
+## Deployment Story
+
+This project is currently designed as a local-first portfolio backend.
+
+It can run locally with Python or through Docker Compose. The next deployment step would be to run the API on a small cloud VM or container platform with environment variables configured for OpenAI access.
+
+A production deployment would need persistent storage, secret management and a more durable metadata store.
+
+---
+
+## Current Limitations
+
+This is intentionally a focused portfolio version.
 
 Current limitations:
 
+* Supports `.txt` files only
+* Uses local JSON metadata storage
+* Uses local file storage for uploads
+* Uses local FAISS index files
+* Embedding generation is synchronous
+* No authentication yet
+* No database yet
+* No PDF parsing yet
+* No streaming LLM responses yet
+* No background job queue yet
 
+---
 
-\- Supports `.txt` files only
+## Next Improvements
 
-\- Uses local file storage
+High-impact next improvements:
 
-\- Uses local FAISS index
+* PDF ingestion
+* Streaming responses for `/ask`
+* API key authentication
+* PostgreSQL metadata storage
+* Background embedding jobs
+* More advanced retrieval evaluation datasets
+* Metadata filtering
+* Docker deployment guide
+* Better error handling around model loading and missing indexes
 
-\- No authentication
+---
 
-\- No database
+## Design Principles
 
-\- No async background processing
+The project intentionally avoids unnecessary complexity.
 
-\- No PDF parsing yet
-
-\- No Docker setup yet
-
-
-
-\## Possible future improvements
-
-
-
-\- PDF ingestion
-
-\- PostgreSQL metadata storage
-
-\- Docker Compose setup
-
-\- Authentication
-
-\- Background jobs for embeddings
-
-\- Better chunking strategy
-
-\- Streaming LLM responses
-
-\- Unit and integration tests
-
-\- CI pipeline with GitHub Actions
-
-
-
-\## Design principles
-
-
-
-The project intentionally avoids overengineering.
-
-
-
-The goal is to clearly demonstrate the core RAG architecture:
-
-
+The goal is to demonstrate practical AI backend engineering:
 
 ```text
-
-ingestion → chunking → embeddings → vector search → grounded answer
-
+ingestion -> chunking -> embeddings -> retrieval -> grounded answer -> evaluation -> observability
 ```
 
-
-
-The code is organized so each responsibility lives in a separate service.
-
+The codebase is built to be readable, testable and easy to extend without turning into an overengineered framework.
