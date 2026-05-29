@@ -54,6 +54,22 @@ def configure_logging() -> None:
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
+    _configure_dependency_log_levels()
+
+
+def _configure_dependency_log_levels() -> None:
+    noisy_loggers = [
+        "httpx",
+        "httpcore",
+        "huggingface_hub",
+        "sentence_transformers",
+        "transformers",
+        "urllib3",
+    ]
+
+    for logger_name in noisy_loggers:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
